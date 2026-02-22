@@ -9,9 +9,17 @@ using WebDriverManager.DriverConfigs.Impl;
 
 class UAIPMembers {
   
-  private string _clubExpressUrl = "";
-  private string _username = "";
-  private string _password = "";
+  private string _clubExpressUrl;
+  private string _username;
+  private string _password;
+
+  // Constructor to initialize the private variables
+  public UAIPMembers(string url, string username, string password)
+  {
+    _clubExpressUrl = url;
+    _username = username;
+    _password = password;
+  }
 
   public void Test()
   {
@@ -45,40 +53,44 @@ class UAIPMembers {
     // Wait for the member count to be more than 0
     var memberCount = new WebDriverWait(driver, TimeSpan.FromSeconds(10)).Until(d => d.FindElements(By.ClassName("biz-info")).Count() > 0);
 
-    IWebElement pageDropDown = driver.FindElement(By.ClassName("paging-dd"));
-    int pageCount = pageDropDown.FindElements(By.TagName("option")).Count();
-    int currentPageIndex = 1;
-
-    Console.WriteLine($"Found {pageCount} page(s) of members.");
-
     List<UAIPMember> members = new List<UAIPMember>();
     List<UAIPMember> membersOnPage;
     UAIPMember firstMemberOnPage = null;
+    int pageNumber = 1;
 
-    while (currentPageIndex <= pageCount)
+    while (true)
     {
-
-      if (currentPageIndex > 1)
-      {
-
-        //Advance to the next page
-        driver.FindElement(By.CssSelector("a.next")).Click();
-
-        //Special wait for subsequent pages
-        new WebDriverWait(new SystemClock(), driver, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5))
-          .Until(d => new UAIPMember(d.FindElements(By.ClassName("biz-info")).First()).Name != firstMemberOnPage.Name);
-
-      }
-
       membersOnPage = driver.FindElements(By.ClassName("biz-info")).Select(mem => new UAIPMember(mem)).ToList();
 
-      Console.WriteLine($"Found {membersOnPage.Count} member(s) on page {currentPageIndex}.");
+      Console.WriteLine($"Found {membersOnPage.Count} member(s) on page {pageNumber}.");
 
       firstMemberOnPage = membersOnPage.First();
       members.AddRange(membersOnPage);
 
-      currentPageIndex++;
+      IWebElement nextButton = driver.FindElement(By.CssSelector("a.next"));
+      if (nextButton.GetAttribute("class")?.Contains("disabled") == true)
+        break;
 
+      string firstMemberNameBeforeClick = firstMemberOnPage.Name;
+      nextButton.Click();
+
+      new WebDriverWait(new SystemClock(), driver, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5))
+        .Until(d =>
+        {
+          var elements = d.FindElements(By.ClassName("biz-info"));
+          if (elements.Count == 0) return false;
+          try
+          {
+            var currentFirstName = elements.First().FindElement(By.ClassName("biz-member-link")).Text;
+            return currentFirstName != firstMemberNameBeforeClick;
+          }
+          catch (StaleElementReferenceException)
+          {
+            return false;
+          }
+        });
+
+      pageNumber++;
     }
 
     Console.WriteLine($"Found {members.Count()} member(s) total.");
